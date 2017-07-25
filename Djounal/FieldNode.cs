@@ -31,15 +31,12 @@ namespace Djounal
             this.boolIsEnabled = _isEnabled;
         }
 
-        public FieldNode(string strXml)
+        public FieldNode(XmlNode xml)
         {
-            string[] strValues = strXml.Split(new string[] { strDelimiter }, StringSplitOptions.None);
-
-            this.intFieldId = int.Parse(strValues[0]);
-            this.strFieldName = strValues[1];
-            this.dataType = (FieldDataType)Enum.Parse(typeof(FieldDataType), strValues[2]);
-            this.boolIsEnabled = bool.Parse(strValues[3]);
-
+            this.intFieldId = int.Parse(xml.Attributes["FieldId"].Value);
+            this.strFieldName = xml.Attributes["FieldName"].Value;
+            this.dataType = (FieldDataType)Enum.Parse(typeof(FieldDataType), xml.Attributes["DataType"].Value);
+            this.boolIsEnabled = bool.Parse(xml.Attributes["IsEnabled"].Value);
         }
 
         public string ToXmlString()
@@ -49,8 +46,10 @@ namespace Djounal
 
         public XmlElement ToXml(XmlDocument doc)
         {
-            XmlElement ret = doc.CreateElement(this.strFieldName);
+            XmlElement ret = doc.CreateElement("Node");
+
             ret.SetAttribute("FieldId", this.intFieldId.ToString());
+            ret.SetAttribute("FieldName", this.strFieldName);
             ret.SetAttribute("DataType", Enum.GetName(typeof(FieldDataType), this.dataType));
             ret.SetAttribute("IsEnabled", this.boolIsEnabled.ToString());
 

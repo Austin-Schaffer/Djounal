@@ -14,3 +14,4 @@ c:\users\austin\documents\visual studio 2015\Projects\Djounal\Djounal\bin\Debug\
 c:\users\austin\documents\visual studio 2015\Projects\Djounal\Djounal\bin\Debug\MySql.Web.xml
 c:\users\austin\documents\visual studio 2015\Projects\Djounal\Djounal\obj\Debug\Djounal.QuestionnaireList.resources
 C:\Users\Austin\Documents\Visual Studio 2015\Projects\Djounal\Djounal\obj\Debug\Djounal.Settings.resources
+C:\Users\Austin\Documents\Visual Studio 2015\Projects\Djounal\Djounal\obj\Debug\Djounal.TextInput.resources

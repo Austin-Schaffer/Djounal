@@ -17,6 +17,7 @@ namespace Djounal
     {
         private MySqlConnection m_conn;
         private ErrorProvider m_errTxtFieldName;
+        private bool boolPauseUpdates;
 
         // DB variables
         private string m_selectedProfile;
@@ -26,6 +27,7 @@ namespace Djounal
         {
             InitializeComponent();
             this.m_conn = conn;
+            boolPauseUpdates = false;
 
             // Load data types
             this.cbxFieldDataType.Items.Add("True/False");
@@ -46,8 +48,10 @@ namespace Djounal
                 m_selectedProfile = (string)reader["profileFileName"];
                 m_adDisableDate = reader.GetDateTime("adDisabledDate");
             }
-            
+            reader.Close();
+
             // Load Profiles
+            int i = 0;
             foreach (string strFilePath in Directory.EnumerateFiles(Directory.GetCurrentDirectory(), "*.profile"))
             {
                 string strProfileName = Path.GetFileNameWithoutExtension(strFilePath);
@@ -55,8 +59,9 @@ namespace Djounal
                 if (strProfileName == m_selectedProfile)
                 {
                     LoadTree(strFilePath);
-                    this.cbxProfiles.SelectedValue = strProfileName;
+                    this.cbxProfiles.SelectedIndex = i;
                 }
+                i++;
             }
 
             
@@ -78,13 +83,18 @@ namespace Djounal
             XmlDocument xmlFile = new XmlDocument();
             xmlFile.Load(strFilePath);
 
-            XmlNodeList nodeChildren = xmlFile.ChildNodes;
+            this.tvFields.Nodes.Clear();
+            XmlNodeList nodeChildren = xmlFile.FirstChild.ChildNodes;
+            foreach (XmlNode nodeCurrent in nodeChildren)
+            {
+                AddNode(new FieldNode(nodeCurrent));
+            }
         }
 
         private void SaveTree()
         {
             XmlDocument doc = new XmlDocument();
-            doc.AppendChild(doc.CreateElement("RootNode"));
+            doc.AppendChild(doc.CreateElement("Profile"));
             
             foreach(TreeNode node in this.tvFields.Nodes)
             {
@@ -97,8 +107,9 @@ namespace Djounal
             {
                 TextInput formTextInput = new TextInput();
                 formTextInput.ShowDialog(this);
+                strProfileName = formTextInput.txtProfileName.Text;
             }
-            doc.Save(this.cbxProfiles.SelectedText + ".profile");
+            doc.Save(strProfileName + ".profile");
         }
 
         private void AppendNodeToXml(FieldNode nodeCur, ref XmlDocument doc)
@@ -118,7 +129,7 @@ namespace Djounal
             
             MySqlCommand cmd = m_conn.CreateCommand();
             cmd.CommandText = "INSERT INTO settings (settingId, adDisabledDate, profileName) VALUES (1, ";
-            cmd.CommandText += (this.chkShowAd.Checked) ? "NULL, " : "NOW(), '";
+            cmd.CommandText += (this.chkShowAd.Checked) ? "NULL, " : "NOW(),";
             cmd.CommandText += strProfileName;
             cmd.CommandText += "') ON DUPLICATE KEY UPDATE adDisabledDate = ";
             cmd.CommandText += (this.chkShowAd.Checked) ? "NULL, " : "NOW(), ";
@@ -135,32 +146,31 @@ namespace Djounal
                 + "box. If this advertisement and its enablement system is too disruptive to your experience then please "
                 + "contact the developer at schaffera23@gmail.com", "Advertisement Notice");
         }
-
-        private void btnAddField_Click(object sender, EventArgs e)
+        
+        private void AddNode(FieldNode nodeToAdd, FieldNode nodeParent = null, bool boolAddChildNodes = false)
         {
-            // Get new node data
-            string nodeName = this.txtFieldName.Text;
-            if(nodeName == string.Empty) // Validate
+            // Add to parent if it exists
+            if(nodeParent == null)
             {
-                m_errTxtFieldName.SetError(txtFieldName, "Cannot Be Empty");
-                return;
+                tvFields.Nodes.Add(nodeToAdd);
             } else
             {
-                m_errTxtFieldName.Clear();
+                nodeParent.Nodes.Add(nodeToAdd);
             }
-            FieldNode.FieldDataType dataType = (FieldNode.FieldDataType) this.cbxFieldDataType.SelectedIndex;
-            bool boolIsEnabled = this.chkFieldEnabled.Checked;
 
-            // Add node
-            FieldNode nodeToAdd = new FieldNode(-1, nodeName, dataType, boolIsEnabled);
-            tvFields.Nodes.Add(nodeToAdd);
+            // Add child nodes
+            if(boolAddChildNodes == true)
+            {
+                foreach(FieldNode nodeChild in nodeToAdd.Nodes)
+                {
+                    AddNode(nodeChild, nodeToAdd, true);
+                }
+            }
+            
             tvFields.SelectedNode = nodeToAdd;
 
-            // Reset form
-            //this.txtFieldName.Text = string.Empty;
-            //this.cbxFieldDataType.SelectedIndex = 0;
-            //this.chkFieldEnabled.Checked = true;
-
+            UpdateNode(nodeToAdd);
+            UpdateFieldsFromNode(nodeToAdd);
             UpdateTreeView();
         }
 
@@ -186,62 +196,88 @@ namespace Djounal
 
         private void txtFieldName_TextChanged(object sender, EventArgs e)
         {
-            UpdateTreeView();
+            if (boolPauseUpdates == true) return;
+            FieldNode nodeToUpdate = (FieldNode)tvFields.SelectedNode;
+            if (nodeToUpdate == null) return;
+            nodeToUpdate.strFieldName = this.txtFieldName.Text;
+            UpdateNode(nodeToUpdate);
         }
 
         private void cbxFieldDataType_SelectedIndexChanged(object sender, EventArgs e)
         {
-            UpdateTreeView();
+            if (boolPauseUpdates == true) return;
+            FieldNode nodeToUpdate = (FieldNode)tvFields.SelectedNode;
+            if (nodeToUpdate == null) return;
+            nodeToUpdate.dataType = (FieldNode.FieldDataType)this.cbxFieldDataType.SelectedIndex;
+            UpdateNode(nodeToUpdate);
         }
 
         private void chkFieldActive_CheckedChanged(object sender, EventArgs e)
         {
-            UpdateTreeView();
-        }
-
-        private void tvFields_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            MessageBox.Show("In order to fund the developement of this project in a small way, a single advertisement "
-                + "will be shown with daily questionnaires. This may be disabled for 30 days by unchecking the appropriate "
-                + "box. If this advertisement and its enablement system is too disruptive to your experience then please "
-                + "contact the developer at schaffera23@gmail.com", "Advertisement Notice");
+            if (boolPauseUpdates == true) return;
+            FieldNode nodeToUpdate = (FieldNode)tvFields.SelectedNode;
+            if (nodeToUpdate == null) return;
+            nodeToUpdate.boolIsEnabled = this.chkFieldEnabled.Checked;
+            UpdateNode(nodeToUpdate);
         }
 
         private void UpdateTreeView()
         {
-            // Update the text on the node
-            if (this.tvFields.SelectedNode == null) return;
-
+            // Get the selected node if it exists
             FieldNode nodeCurrent = (FieldNode)this.tvFields.SelectedNode;
+            if (nodeCurrent == null) return;
 
-            nodeCurrent.strFieldName = this.txtFieldName.Text;
-            nodeCurrent.dataType = (FieldNode.FieldDataType)this.cbxFieldDataType.SelectedIndex;
-            nodeCurrent.boolIsEnabled = this.chkFieldEnabled.Checked;
+            // Update fields with node data
+            this.txtFieldName.Text = nodeCurrent.strFieldName;
+            this.cbxFieldDataType.SelectedIndex = (int)nodeCurrent.dataType;
+            this.chkFieldEnabled.Checked = nodeCurrent.boolIsEnabled;
+        }
 
-            string strNodeName = nodeCurrent.strFieldName + " [" + nodeCurrent.dataType + "]";
+        private void UpdateNode(FieldNode nodeToUpdate)
+        {
+            if(nodeToUpdate == null) return;
+
+            // Change text
+            string strNodeName = this.txtFieldName.Text + " [" + cbxFieldDataType.Text + "]";
             this.tvFields.SelectedNode.Text = strNodeName;
 
+            // Update color
             this.tvFields.SelectedNode.ForeColor = chkFieldEnabled.Checked ? Color.Black : Color.LightGray;
+        }
+
+        private void UpdateFieldsFromNode(FieldNode node)
+        {
+            boolPauseUpdates = true;
+            this.txtFieldName.Text = node.strFieldName;
+            this.cbxFieldDataType.SelectedIndex = (int)node.dataType;
+            this.chkFieldEnabled.Checked = node.boolIsEnabled;
+            boolPauseUpdates = false;
         }
 
         private void cbxProfiles_SelectedIndexChanged(object sender, EventArgs e)
         {
-            // Load tree
+            // Get file path
+            string strFilePath = Directory.GetCurrentDirectory() + "\\" + this.cbxProfiles.Text + ".profile";
+            LoadTree(strFilePath);
+        }
+
+        private void btnAddField_Click(object sender, EventArgs e)
+        {
+            FieldNode nodeNew = new FieldNode(0, "New Field", FieldNode.FieldDataType.Boolean, true);
+            AddNode(nodeNew);
+        }
+
+        private void btnAddSubField_Click(object sender, EventArgs e)
+        {
+            FieldNode nodeNew = new FieldNode(0, "New Field", FieldNode.FieldDataType.Boolean, true);
+            AddNode(nodeNew, (FieldNode)tvFields.SelectedNode);
         }
 
         private void tvFields_NodeMouseClick(object sender, TreeNodeMouseClickEventArgs e)
         {
-            FieldNode nodeCurrent = (FieldNode)e.Node;
-
-            // Update form
-            this.txtFieldName.Text = nodeCurrent.strFieldName;
-            this.cbxFieldDataType.SelectedIndex = (int) nodeCurrent.dataType;
-            this.chkFieldEnabled.Checked  = nodeCurrent.boolIsEnabled;
-        }
-
-        private void tvFields_Click(object sender, EventArgs e)
-        {
-            this.tvFields.SelectedNode = null;
+            FieldNode nodeSelected = (FieldNode)e.Node;
+            this.tvFields.SelectedNode = nodeSelected;
+            UpdateFieldsFromNode(nodeSelected);
         }
     }
 }

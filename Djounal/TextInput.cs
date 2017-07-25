@@ -16,5 +16,16 @@ namespace Djounal
         {
             InitializeComponent();
         }
+
+        private void btnSave_Click(object sender, EventArgs e)
+        {
+            this.Close();
+        }
+
+        private void btnCancel_Click(object sender, EventArgs e)
+        {
+            this.txtProfileName.Text = "";
+            this.Close();
+        }
     }
 }
